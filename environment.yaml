@@ -1,0 +1,9 @@
+name: APIC
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy
+  - pip
+  - pip:
+    - taichi==1.7.3
