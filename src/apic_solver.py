@@ -9,40 +9,39 @@ GRAVITY = -9.81
 @ti.data_oriented
 class APIC:
     def __init__(self, quality: int, max_particles: int):
-        self.n_particles = ti.field(dtype=ti.int32, shape=())
         self.max_particles = max_particles
         self.n_grid = 128 * quality
-        self.n_cells = self.n_grid * self.n_grid
         self.dx = 1 / self.n_grid
         self.inv_dx = float(self.n_grid)
         self.dt = 2e-3 / quality
         self.inv_dt = 1 / self.dt
+        self.vol_p = (self.dx * 0.5) ** 2
         self.rho = 1000
-        # self.rho_0 = 1
-        self.particle_vol = (self.dx * 0.5) ** 2
-        self.n_dimensions = 2
 
-        # Properties on MAC-faces.
-        self.classification_x = ti.field(dtype=int, shape=(self.n_grid + 1, self.n_grid))
-        self.classification_y = ti.field(dtype=int, shape=(self.n_grid, self.n_grid + 1))
-        self.velocity_x = ti.field(dtype=ti.float32, shape=(self.n_grid + 1, self.n_grid))
-        self.velocity_y = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid + 1))
-        # self.volume_x = ti.field(dtype=ti.float32, shape=(self.n_grid + 1, self.n_grid))
-        # self.volume_y = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid + 1))
-        self.mass_x = ti.field(dtype=ti.float32, shape=(self.n_grid + 1, self.n_grid))
-        self.mass_y = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid + 1))
+        # Variable properties, must be stored in fields:
+        self.n_particles = ti.field(dtype=ti.int32, shape=())
 
-        # Properties on MAC-cells.
+        # Properties on MAC-faces:
+        self.classification_x = ti.field(dtype=ti.int8, shape=(self.n_grid + 1, self.n_grid))
+        self.classification_y = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid + 1))
+        self.velocity_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
+        self.velocity_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
+        # self.volume_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
+        # self.volume_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
+        self.mass_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
+        self.mass_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
+
+        # Properties on MAC-cells:
         self.classification_c = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid))
-        self.mass_c = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid))
+        self.mass_c = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid))
 
-        # Properties on particles.
-        self.position_p = ti.Vector.field(2, dtype=float, shape=max_particles)
-        self.velocity_p = ti.Vector.field(2, dtype=float, shape=max_particles)
-        self.cx_p = ti.Vector.field(2, dtype=float, shape=max_particles)
-        self.cy_p = ti.Vector.field(2, dtype=float, shape=max_particles)
-        self.state_p = ti.field(dtype=ti.float32, shape=max_particles)
-        self.mass_p = ti.field(dtype=ti.float32, shape=max_particles)
+        # Properties on particles:
+        self.position_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
+        self.velocity_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
+        self.cx_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
+        self.cy_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
+        self.state_p = ti.field(dtype=ti.f32, shape=max_particles)
+        self.mass_p = ti.field(dtype=ti.f32, shape=max_particles)
 
         # The width of the simulation boundary in grid nodes and offsets to
         # guarantee that seeded particles always lie within the boundary:
@@ -80,6 +79,8 @@ class APIC:
             is_colliding |= not (self.boundary_width <= j < self.n_grid - self.boundary_width)
             if is_colliding:
                 self.classification_c[i, j] = Classification.Colliding
+            else:
+                self.classification_c[i, j] = Classification.Empty
 
     @ti.kernel
     def reset_grids(self):
@@ -104,10 +105,10 @@ class APIC:
             if self.state_p[p] == State.Hidden:
                 continue
 
-            # Find the nearest cell and set it to interior.
-            grid = ti.cast(self.position_p[p] * self.inv_dx, int)
-            if not self.is_colliding(grid.x, grid.y):  # pyright: ignore
-                self.classification_c[grid] = Classification.Interior
+            # Find the nearest cell and set it to interior:
+            i, j = ti.cast(self.position_p[p] * self.inv_dx, int)  # pyright: ignore
+            if not self.is_colliding(i, j):  # pyright: ignore
+                self.classification_c[i, j] = Classification.Interior
 
     @ti.kernel
     def particle_to_grid(self):
@@ -184,7 +185,7 @@ class APIC:
 
     @ti.kernel
     def fill_pressure_system(self, A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray()):  # pyright: ignore
-        z = self.rho * self.dx * self.inv_dt
+        coefficient = self.rho * self.dx * self.inv_dt
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
             center_entry = 0.0  # to keep max_num_triplets as low as possible
             idx = (i * self.n_grid) + j  # raveled index
@@ -195,19 +196,19 @@ class APIC:
                 if not self.is_colliding(i + 1, j):
                     # rho = self.mass_x[i + 1, j] / self.volume_x[i + 1, j]
                     # z = rho * self.dx * self.inv_dt
-                    b[idx] += z * self.velocity_x[i + 1, j]
+                    b[idx] += coefficient * self.velocity_x[i + 1, j]
                 if not self.is_colliding(i - 1, j):
                     # rho = self.mass_x[i, j] / self.volume_x[i, j]
                     # z = rho * self.dx * self.inv_dt
-                    b[idx] -= z * self.velocity_x[i, j]
+                    b[idx] -= coefficient * self.velocity_x[i, j]
                 if not self.is_colliding(i, j + 1):
                     # rho = self.mass_y[i, j + 1] / self.volume_y[i, j + 1]
                     # z = rho * self.dx * self.inv_dt
-                    b[idx] += z * self.velocity_y[i, j + 1]
+                    b[idx] += coefficient * self.velocity_y[i, j + 1]
                 if not self.is_colliding(i, j - 1):
                     # rho = self.mass_y[i, j] / self.volume_y[i, j]
                     # z = rho * self.dx * self.inv_dt
-                    b[idx] -= z * self.velocity_y[i, j]
+                    b[idx] -= coefficient * self.velocity_y[i, j]
 
                 # We will apply a Neumann boundary condition on the colliding faces,
                 # to guarantee zero flux into colliding cells, by just not adding these
@@ -244,26 +245,22 @@ class APIC:
 
     @ti.kernel
     def apply_pressure(self, pressure: ti.types.ndarray()):  # pyright: ignore
-        z = self.dt / (self.dx * self.rho)
+        coefficient = self.dt / (self.dx * self.rho)
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
             idx = i * self.n_grid + j
             if self.is_interior(i - 1, j) or self.is_interior(i, j):
                 if not (self.is_colliding(i - 1, j) or self.is_colliding(i, j)):
                     pressure_gradient = pressure[idx] - pressure[idx - self.n_grid]
-                    self.velocity_x[i, j] -= z * pressure_gradient
+                    self.velocity_x[i, j] -= coefficient * pressure_gradient
             if self.is_interior(i, j - 1) or self.is_interior(i, j):
                 if not (self.is_colliding(i, j - 1) or self.is_colliding(i, j)):
                     pressure_gradient = pressure[idx] - pressure[idx - 1]
-                    self.velocity_y[i, j] -= z * pressure_gradient
+                    self.velocity_y[i, j] -= coefficient * pressure_gradient
 
     def correct_pressure(self):
-        A = SparseMatrixBuilder(
-            max_num_triplets=(5 * self.n_cells),
-            num_rows=self.n_cells,
-            num_cols=self.n_cells,
-            dtype=ti.f32,
-        )
-        b = ti.ndarray(ti.f32, shape=self.n_cells)
+        n_cells = self.n_grid * self.n_grid
+        A = SparseMatrixBuilder(max_num_triplets=(5 * n_cells), num_rows=n_cells, num_cols=n_cells, dtype=ti.f32)
+        b = ti.ndarray(ti.f32, shape=n_cells)
         self.fill_pressure_system(A, b)
 
         # Solve the linear system, apply the resulting pressure:
@@ -316,7 +313,8 @@ class APIC:
             # TODO: return to computing bx, by instead of using the weight gradients
             # NOTE: We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
             #       this avoids computing the weight gradients.
-            # NOTE: C = B @ (D^(-1)), 1 / dx cancelled out by dx in dpos, Cubic kernels in P2G
+            # NOTE: C = B @ (D^(-1)), one inv_dx is cancelled with one dx in dpos,
+            #       D^(-1) is constant scaling for cubic kernels.
             # self.cx_p[p] = 4 * self.inv_dx * b_x
             # self.cy_p[p] = 4 * self.inv_dx * b_y
             self.cx_p[p] = cx
