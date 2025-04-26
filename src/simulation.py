@@ -1,5 +1,5 @@
-from src.configurations import Configuration
 from src.poisson_disk import PoissonDiskSampler
+from src.configurations import Configuration
 from src.constants import State, Color
 from src.apic_solver import APIC
 
@@ -61,20 +61,9 @@ class Simulation:
     def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
         # Seed from the geometry and given position:
         self.apic_solver.velocity_p[index] = geometry.velocity
-        # self.apic_solver.lambda_0_p[index] = geometry.lambda_0
-        # self.apic_solver.mu_0_p[index] = geometry.mu_0
         self.apic_solver.position_p[index] = position
 
-        # TODO: 5e9 would be a good test
-        # self.apic_solver.lambda_0_p[index] = 5e9
-        # self.apic_solver.lambda_0_p[index] = 5e5
-        # self.apic_solver.mu_0_p[index] = 0
-
         # Set properties to default values:
-        # TODO: mass can be moved to constant
-        # self.apic_solver.mass_p[index] = 1.0 # self.apic_solver.particle_vol * self.apic_solver.rho_0
-        # print("MASS = ", self.apic_solver.mass_p[index])
-
         self.apic_solver.state_p[index] = State.Active
         self.apic_solver.cx_p[index] = 0
         self.apic_solver.cy_p[index] = 0
@@ -116,14 +105,6 @@ class Simulation:
         Parameters:
             configuration: Configuration
         """
-        # self.apic_solver.ambient_temperature[None] = configuration.ambient_temperature
-        # self.apic_solver.lambda_0[None] = configuration.lambda_0
-        # self.apic_solver.theta_c[None] = configuration.theta_c
-        # self.apic_solver.theta_s[None] = configuration.theta_s
-        # self.apic_solver.zeta[None] = configuration.zeta
-        # self.apic_solver.mu_0[None] = configuration.mu_0
-        # self.apic_solver.nu[None] = configuration.nu
-        # self.apic_solver.E[None] = configuration.E
         self.configuration = configuration
         self.reset()
 
@@ -227,7 +208,7 @@ class Simulation:
         self.canvas.circles(
             centers=self.apic_solver.position_p,
             color=Color.Water,
-            radius=0.0015,
+            radius=0.0012,
         )
         if self.should_write_to_disk and not self.is_paused and not self.is_showing_settings:
             self.video_manager.write_frame(self.window.get_image_buffer_as_numpy())
