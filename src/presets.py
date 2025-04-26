@@ -21,7 +21,7 @@ configuration_list = [
                     lower_left=(0.48, 0.48),
                     frame_threshold=i,
                 )
-                for i in range(1, 300)
+                for i in range(1, 200)
             ],
         ],
         E=5e5,  # Young's modulus (1.4e5)
@@ -51,12 +51,12 @@ configuration_list = [
         name="Simple Spout Source [Water]",
         geometries=[
             Rectangle(
-                lower_left=(offset + 0.48, 0.48),
+                lower_left=(0.48, 0.48),
                 velocity=(0, -3),
                 size=(0.04, 0.04),
                 frame_threshold=i,
             )
-            for i in range(1, 300)
+            for i in range(1, 200)
         ],
         E=5.5e5,  # Young's modulus (1.4e5)
         nu=0.45,  # Poisson's ratio (0.2)
