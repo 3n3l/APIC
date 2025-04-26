@@ -172,3 +172,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Ignore frames/gifs/videos
+.output
+
+# Apple
+.DS_Store
+
+# imgui
+imgui.ini
