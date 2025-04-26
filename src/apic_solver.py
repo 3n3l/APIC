@@ -34,7 +34,6 @@ class APIC:
 
         # Properties on MAC-cells.
         self.classification_c = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid))
-        self.pressure_c = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid))
         self.mass_c = ti.field(dtype=ti.float32, shape=(self.n_grid, self.n_grid))
 
         # Properties on particles.
@@ -93,10 +92,6 @@ class APIC:
             self.velocity_y[i, j] = 0
             # self.volume_y[i, j] = 0
             self.mass_y[i, j] = 0
-
-        for i, j in self.pressure_c:
-            if self.is_empty(i, j):  # pyright: ignore
-                self.pressure_c[i, j] = 0
 
     @ti.kernel
     def classify_cells(self):
@@ -177,12 +172,22 @@ class APIC:
                 if collision_top or collision_bottom:
                     self.velocity_y[i, j] = 0
 
+    # @ti.kernel
+    # def compute_volumes(self):
+    #     for i, j in self.classification_c:
+    #         if self.is_interior(i, j):
+    #             control_volume = 0.5 * self.dx * self.dx
+    #             self.volume_x[i + 1, j] += control_volume
+    #             self.volume_y[i, j + 1] += control_volume
+    #             self.volume_x[i, j] += control_volume
+    #             self.volume_y[i, j] += control_volume
+
     @ti.kernel
     def fill_pressure_system(self, A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray()):  # pyright: ignore
         z = self.rho * self.dx * self.inv_dt
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
+            center_entry = 0.0  # to keep max_num_triplets as low as possible
             idx = (i * self.n_grid) + j  # raveled index
-            diagonal = 0.0  # center value
             if self.is_interior(i, j):
                 # Build the right-hand side of the linear system.
                 # This uses a modified divergence, where the velocities of faces
@@ -207,69 +212,53 @@ class APIC:
                 # We will apply a Neumann boundary condition on the colliding faces,
                 # to guarantee zero flux into colliding cells, by just not adding these
                 # face values in the Laplacian for the off-diagonal values.
+                # NOTE: we can use the raveled index to quickly access adjacent cells with:
+                # idx(i, j) = (i * n) + j
+                #   => idx(i - 1, j) = ((i - 1) * n) + j = (i * n) + j - n = idx(i, j) - n
+                #   => idx(i, j - 1) = (i * n) + j - 1 = idx(i, j) - 1, etc.
                 if not self.is_colliding(i - 1, j):
-                    diagonal -= 1.0
-                    # if self.is_interior(i - 1, j):
+                    center_entry -= 1.0
                     if not self.is_empty(i - 1, j):
                         A[idx, idx - self.n_grid] += 1.0
 
                 if not self.is_colliding(i + 1, j):
-                    diagonal -= 1.0
-                    # if self.is_interior(i + 1, j):
+                    center_entry -= 1.0
                     if not self.is_empty(i + 1, j):
                         A[idx, idx + self.n_grid] += 1.0
 
                 if not self.is_colliding(i, j - 1):
-                    diagonal -= 1.0
-                    # if self.is_interior(i, j - 1):
+                    center_entry -= 1.0
                     if not self.is_empty(i, j - 1):
                         A[idx, idx - 1] += 1.0
 
                 if not self.is_colliding(i, j + 1):
-                    diagonal -= 1.0
-                    # if self.is_interior(i, j + 1):
+                    center_entry -= 1.0
                     if not self.is_empty(i, j + 1):
                         A[idx, idx + 1] += 1.0
 
-                A[idx, idx] += diagonal
+                A[idx, idx] += center_entry
 
             else:  # Homogeneous Dirichlet boundary condition.
                 A[idx, idx] += 1.0
                 b[idx] = 0.0
 
     @ti.kernel
-    def apply_pressure(self):
+    def apply_pressure(self, pressure: ti.types.ndarray()):  # pyright: ignore
         z = self.dt / (self.dx * self.rho)
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
+            idx = i * self.n_grid + j
             if self.is_interior(i - 1, j) or self.is_interior(i, j):
                 if not (self.is_colliding(i - 1, j) or self.is_colliding(i, j)):
-                    self.velocity_x[i, j] -= z * (self.pressure_c[i, j] - self.pressure_c[i - 1, j])
+                    pressure_gradient = pressure[idx] - pressure[idx - self.n_grid]
+                    self.velocity_x[i, j] -= z * pressure_gradient
             if self.is_interior(i, j - 1) or self.is_interior(i, j):
                 if not (self.is_colliding(i, j - 1) or self.is_colliding(i, j)):
-                    self.velocity_y[i, j] -= z * (self.pressure_c[i, j] - self.pressure_c[i, j - 1])
-
-    # @ti.kernel
-    # def compute_volumes(self):
-    #     for i, j in self.classification_c:
-    #         if self.is_interior(i, j):
-    #             control_volume = 0.5 * self.dx * self.dx
-    #             self.volume_x[i + 1, j] += control_volume
-    #             self.volume_y[i, j + 1] += control_volume
-    #             self.volume_x[i, j] += control_volume
-    #             self.volume_y[i, j] += control_volume
-
-    @ti.kernel
-    def fill_pressure(self, p: ti.types.ndarray()):  # pyright: ignore
-        # TODO: move this to apply_pressure, delete self.cell_pressure (IF POSSIBLE)
-        for i, j in self.pressure_c:
-            row = (i * self.n_grid) + j
-            self.pressure_c[i, j] = p[row]
-            # self.pressure_c[i, j] = p[i ,j]
+                    pressure_gradient = pressure[idx] - pressure[idx - 1]
+                    self.velocity_y[i, j] -= z * pressure_gradient
 
     def correct_pressure(self):
         A = SparseMatrixBuilder(
-            # TODO: max_num_triplets could be optimized to N * 5?
-            max_num_triplets=(10 * self.n_cells),
+            max_num_triplets=(5 * self.n_cells),
             num_rows=self.n_cells,
             num_cols=self.n_cells,
             dtype=ti.f32,
@@ -277,13 +266,9 @@ class APIC:
         b = ti.ndarray(ti.f32, shape=self.n_cells)
         self.fill_pressure_system(A, b)
 
-        # Solve the linear system:
-        solver = SparseCG(A.build(), b, atol=1e-5, max_iter=100)
-        p, _ = solver.solve()
-
-        # Apply the pressure to the intermediate velocity field:
-        self.fill_pressure(p)
-        self.apply_pressure()
+        # Solve the linear system, apply the resulting pressure:
+        solver = SparseCG(A.build(), b, atol=1e-5, max_iter=500)
+        self.apply_pressure(solver.solve()[0])
 
     @ti.kernel
     def grid_to_particle(self):
@@ -304,7 +289,6 @@ class APIC:
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
-
             grad_w_x = [dist_x - 1.5, (-2) * (dist_x - 1), dist_x - 0.5]
             grad_w_y = [dist_y - 1.5, (-2) * (dist_y - 1), dist_y - 0.5]
 
@@ -329,6 +313,7 @@ class APIC:
                 cx += self.velocity_x[base_x + offset] * grad_weight_x
                 cy += self.velocity_y[base_y + offset] * grad_weight_y
 
+            # TODO: return to computing bx, by instead of using the weight gradients
             # NOTE: We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
             #       this avoids computing the weight gradients.
             # NOTE: C = B @ (D^(-1)), 1 / dx cancelled out by dx in dpos, Cubic kernels in P2G
