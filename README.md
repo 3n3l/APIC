@@ -1,6 +1,14 @@
 ## The Affine Particle-In-Cell Method (APIC)
 Implementation of the [The Affine Particle-In-Cell Method](https://doi.org/10.1145/2766996) in [Taichi](https://www.taichi-lang.org/).
 
+<!-- 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/747153a1-90e8-4462-be5a-e2413c021f92" alt="animated" height=720px />
+</p>
+-->
+
+
+![spout-ezgif com-optimize](https://github.com/user-attachments/assets/747153a1-90e8-4462-be5a-e2413c021f92)
 
 ### Installation
 Dependencies are managed with Conda:
