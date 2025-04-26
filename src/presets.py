@@ -2,7 +2,8 @@ from src.configurations import Circle, Rectangle, Configuration
 
 # Width of the bounding box:
 # TODO: scale and translate positions to coordinates of bounding box
-offset = 0.0234375
+offset = 0.0234375  # n_grid = 3, quality = 1
+# offset = 0.0078125 # n_grid = 1, quality = 1
 
 configuration_list = [
     Configuration(
@@ -50,7 +51,7 @@ configuration_list = [
         name="Simple Spout Source [Water]",
         geometries=[
             Rectangle(
-                lower_left=(0.48, 0.48),
+                lower_left=(offset + 0.48, 0.48),
                 velocity=(0, -3),
                 size=(0.04, 0.04),
                 frame_threshold=i,

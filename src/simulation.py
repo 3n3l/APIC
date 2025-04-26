@@ -3,7 +3,6 @@ from src.poisson_disk import PoissonDiskSampler
 from src.constants import State, Color
 from src.apic_solver import APIC
 
-from abc import abstractmethod
 from datetime import datetime
 
 import taichi as ti
@@ -43,17 +42,9 @@ class Simulation:
         self.load_configuration(configurations[self.configuration_id])
 
         # GGUI.
-        self.window = ti.ui.Window(name, res)
+        self.window = ti.ui.Window(name=name, res=res, fps_limit=60)
         self.canvas = self.window.get_canvas()
         self.gui = self.window.get_gui()
-
-    @abstractmethod
-    def render(self) -> None:
-        pass
-
-    @abstractmethod
-    def run(self) -> None:
-        pass
 
     def substep(self) -> None:
         self.current_frame += 1
@@ -64,43 +55,29 @@ class Simulation:
                 geometry = self.subsequent_geometries.pop(0)
                 self.add_geometry(geometry)
 
-        for _ in range(int(2e-3 // self.apic_solver.dt)):
-            self.apic_solver.reset_grids()
-            self.apic_solver.particle_to_grid()
-            self.apic_solver.momentum_to_velocity()
-            self.apic_solver.classify_cells()
-            self.apic_solver.compute_volumes()
-            self.apic_solver.pressure_solver.solve()
-            # self.apic_solver.heat_solver.solve()
-            self.apic_solver.grid_to_particle()
+        self.apic_solver.substep()
 
     @ti.func
     def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
         # Seed from the geometry and given position:
-        self.apic_solver.conductivity_p[index] = geometry.conductivity
-        self.apic_solver.temperature_p[index] = geometry.temperature
-        self.apic_solver.capacity_p[index] = geometry.capacity
         self.apic_solver.velocity_p[index] = geometry.velocity
         # self.apic_solver.lambda_0_p[index] = geometry.lambda_0
-        self.apic_solver.color_p[index] = geometry.color
-        self.apic_solver.phase_p[index] = geometry.phase
-        self.apic_solver.heat_p[index] = geometry.heat
         # self.apic_solver.mu_0_p[index] = geometry.mu_0
         self.apic_solver.position_p[index] = position
 
         # TODO: 5e9 would be a good test
         # self.apic_solver.lambda_0_p[index] = 5e9
-        self.apic_solver.lambda_0_p[index] = 5e5
-        self.apic_solver.mu_0_p[index] = 0
+        # self.apic_solver.lambda_0_p[index] = 5e5
+        # self.apic_solver.mu_0_p[index] = 0
 
         # Set properties to default values:
-        self.apic_solver.mass_p[index] = self.apic_solver.particle_vol * self.apic_solver.rho_0
-        self.apic_solver.inv_lambda_p[index] = 1 / self.apic_solver.lambda_0[None]
-        self.apic_solver.F_p[index] = ti.Matrix([[1, 0], [0, 1]])
-        self.apic_solver.C_p[index] = ti.Matrix.zero(float, 2, 2)
+        # TODO: mass can be moved to constant
+        # self.apic_solver.mass_p[index] = 1.0 # self.apic_solver.particle_vol * self.apic_solver.rho_0
+        # print("MASS = ", self.apic_solver.mass_p[index])
+
         self.apic_solver.state_p[index] = State.Active
-        self.apic_solver.JE_p[index] = 1.0
-        self.apic_solver.JP_p[index] = 1.0
+        self.apic_solver.cx_p[index] = 0
+        self.apic_solver.cy_p[index] = 0
 
     @ti.kernel
     def add_geometry(self, geometry: ti.template()):  # pyright: ignore
@@ -139,14 +116,14 @@ class Simulation:
         Parameters:
             configuration: Configuration
         """
-        self.apic_solver.ambient_temperature[None] = configuration.ambient_temperature
-        self.apic_solver.lambda_0[None] = configuration.lambda_0
-        self.apic_solver.theta_c[None] = configuration.theta_c
-        self.apic_solver.theta_s[None] = configuration.theta_s
-        self.apic_solver.zeta[None] = configuration.zeta
-        self.apic_solver.mu_0[None] = configuration.mu_0
-        self.apic_solver.nu[None] = configuration.nu
-        self.apic_solver.E[None] = configuration.E
+        # self.apic_solver.ambient_temperature[None] = configuration.ambient_temperature
+        # self.apic_solver.lambda_0[None] = configuration.lambda_0
+        # self.apic_solver.theta_c[None] = configuration.theta_c
+        # self.apic_solver.theta_s[None] = configuration.theta_s
+        # self.apic_solver.zeta[None] = configuration.zeta
+        # self.apic_solver.mu_0[None] = configuration.mu_0
+        # self.apic_solver.nu[None] = configuration.nu
+        # self.apic_solver.E[None] = configuration.E
         self.configuration = configuration
         self.reset()
 
@@ -200,27 +177,6 @@ class Simulation:
             self.load_configuration(configuration)
             self.is_paused = True
 
-    def show_parameters(self, subwindow) -> None:
-        """
-        Show all parameters in the subwindow, the user can then adjust these values
-        with sliders which will update the correspoding value in the solver.
-        ---
-        Parameters:
-            subwindow: GGUI subwindow
-        """
-        # TODO: Implement back stickiness + friction or remove them entirely
-        # self.solver.stickiness[None] = subwindow.slider_float("stickiness", self.solver.stickiness[None], 1.0, 5.0)
-        # self.solver.friction[None] = subwindow.slider_float("friction", self.solver.friction[None], 1.0, 5.0)
-        self.apic_solver.theta_c[None] = subwindow.slider_float("theta_c", self.apic_solver.theta_c[None], 1e-2, 10e-2)
-        self.apic_solver.theta_s[None] = subwindow.slider_float("theta_s", self.apic_solver.theta_s[None], 1e-3, 10e-3)
-        self.apic_solver.zeta[None] = subwindow.slider_int("zeta", self.apic_solver.zeta[None], 3, 20)
-        self.apic_solver.nu[None] = subwindow.slider_float("nu", self.apic_solver.nu[None], 0.1, 0.4)
-        self.apic_solver.E[None] = subwindow.slider_float("E", self.apic_solver.E[None], 4.8e4, 5.5e5)
-        E = self.apic_solver.E[None]
-        nu = self.apic_solver.nu[None]
-        self.apic_solver.lambda_0[None] = E * nu / ((1 + nu) * (1 - 2 * nu))
-        self.apic_solver.mu_0[None] = E / (2 * (1 + nu))
-
     def show_buttons(self, subwindow) -> None:
         """
         Show a set of buttons in the subwindow, this mainly holds functions to control the simulation.
@@ -250,7 +206,6 @@ class Simulation:
             return  # don't bother
         self.is_showing_settings = True
         with self.gui.sub_window("Settings", 0.01, 0.01, 0.98, 0.98) as subwindow:
-            self.show_parameters(subwindow)
             self.show_configurations(subwindow)
             self.show_buttons(subwindow)
 

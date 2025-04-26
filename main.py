@@ -10,9 +10,10 @@ import taichi as ti
 def main():
     # Initialize Taichi on the chosen architecture:
     if should_use_cuda_backend:
-        ti.init(arch=ti.cuda, debug=arguments.debug)
+        ti.init(arch=ti.cuda, debug=False)
     else:
-        ti.init(arch=ti.cpu, debug=arguments.debug)
+        ti.init(arch=ti.cpu, debug=True)
+        # ti.init(arch=ti.gpu, debug=False)
 
     apic_solver = APIC(quality=arguments.quality, max_particles=100_000)
     poisson_disk_sampler = PoissonDiskSampler(apic_solver=apic_solver)
