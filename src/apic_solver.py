@@ -155,10 +155,14 @@ class APIC:
         for i, j in self.velocity_x:
             if (mass := self.mass_x[i, j]) > 0:
                 self.velocity_x[i, j] /= mass
-                collision_right = i > (self.n_grid - self.boundary_width)  # and self.velocity_x[i, j] > 0
-                collision_left = i < self.boundary_width  # and self.velocity_x[i, j] < 0
-                # collision_right = self.is_colliding(i + 1, j) # and self.velocity_x[i, j] > 0
-                # collision_left = self.is_colliding(i, j) # and self.velocity_x[i, j] < 0
+
+                collision_right = i >= (self.n_grid - self.boundary_width) # and self.velocity_x[i, j] > 0
+                collision_left = i <= self.boundary_width # and self.velocity_x[i, j] < 0
+
+                # collision_right = self.is_colliding(i + 1, j) and self.velocity_x[i, j] > 0
+                # collision_left = self.is_colliding(i, j) and self.velocity_x[i, j] < 0
+
+                # if not (self.boundary_width <= i < self.n_grid - self.boundary_width):
                 if collision_left or collision_right:
                     self.velocity_x[i, j] = 0
 
@@ -166,10 +170,15 @@ class APIC:
             if (mass := self.mass_y[i, j]) > 0:
                 self.velocity_y[i, j] /= mass
                 self.velocity_y[i, j] += GRAVITY * self.dt
-                # collision_bottom = self.is_colliding(i, j - 1) # and self.velocity_y[i, j] < 0
-                # collision_top = self.is_colliding(i, j) # and self.velocity_y[i, j] > 0
-                collision_top = j > (self.n_grid - self.boundary_width)  # and self.velocity_y[i, j] > 0
-                collision_bottom = j < self.boundary_width  # and self.velocity_y[i, j] < 0
+
+                # collision_bottom = self.is_colliding(i, j - 1) and self.velocity_y[i, j] < 0
+                # collision_top = self.is_colliding(i, j) and self.velocity_y[i, j] > 0
+
+                collision_top = j >= (self.n_grid - self.boundary_width) # and self.velocity_y[i, j] > 0
+                collision_bottom = j <= self.boundary_width # and self.velocity_y[i, j] < 0
+
+                # is_colliding |= not (self.boundary_width <= j < self.n_grid - self.boundary_width)
+                # if not (self.boundary_width <= j < self.n_grid - self.boundary_width):
                 if collision_top or collision_bottom:
                     self.velocity_y[i, j] = 0
 
@@ -319,31 +328,7 @@ class APIC:
             # self.cy_p[p] = 4 * self.inv_dx * b_y
             self.cx_p[p] = cx
             self.cy_p[p] = cy
-
-            # TODO: there might be some conditions to advections?!
-            # self.position_p[p] += self.dt * next_velocity
-            # self.velocity_p[p] = next_velocity
-
-            # NOTE: this is done to get rid of the jagged edges and would allow a boundary_width of 1,
-            #       but it looks like this compressed the fluid around the border to thin strip
-            # TODO: is there some better way to do this?
-            next_position = self.position_p[p] + self.dt * next_velocity
-            epsilon = 1e-5
-            if next_position.x < self.lower:  # pyright: ignore
-                next_position.x = self.lower  # pyright: ignore
-                next_velocity.x = 0  # pyright: ignore
-            if next_position.x >= self.upper:  # pyright: ignore
-                next_position.x = self.upper - epsilon  # pyright: ignore
-                next_velocity.x = 0  # pyright: ignore
-
-            if next_position.y < self.lower:  # pyright: ignore
-                next_position.y = self.lower  # pyright: ignore
-                next_velocity.y = 0  # pyright: ignore
-            if next_position.y >= self.upper:  # pyright: ignore
-                next_position.y = self.upper - epsilon  # pyright: ignore
-                next_velocity.y = 0  # pyright: ignore
-
-            self.position_p[p] = next_position
+            self.position_p[p] += self.dt * next_velocity
             self.velocity_p[p] = next_velocity
 
     def substep(self) -> None:
