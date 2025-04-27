@@ -5,17 +5,9 @@ from typing import Tuple
 
 
 class Geometry(ABC):
-    def __init__(
-        self,
-        velocity: Tuple[float, float],
-        frame_threshold: int,
-    ) -> None:
+    def __init__(self, velocity: Tuple[float, float], frame_threshold: int) -> None:
         self.frame_threshold = frame_threshold
         self.velocity = list(velocity)
-
-        # TODO: are these even needed?
-        self.lambda_0 = 9e5
-        self.mu_0 = 0
 
     @abstractmethod
     def in_bounds(self, x: float, y: float) -> bool:
