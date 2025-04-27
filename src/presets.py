@@ -55,8 +55,8 @@ configuration_list = [
         name="Stationary Pool [Water]",
         geometries=[
             Rectangle(
-                lower_left=(0.0, 0.0),
-                size=(1.0, 0.1),
+                lower_left=(offset, offset),
+                size=(1.0, 0.25),
                 velocity=(0, 0),
             ),
         ],
