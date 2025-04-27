@@ -16,7 +16,6 @@ class APIC:
         self.dt = 2e-3 / quality
         self.inv_dt = 1 / self.dt
         self.vol_p = (self.dx * 0.5) ** 2
-        self.rho = 1000
 
         # Variable properties, must be stored in fields:
         self.n_particles = ti.field(dtype=ti.int32, shape=())
@@ -26,8 +25,8 @@ class APIC:
         self.classification_y = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid + 1))
         self.velocity_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
         self.velocity_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
-        # self.volume_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
-        # self.volume_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
+        self.volume_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
+        self.volume_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
         self.mass_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
         self.mass_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
 
@@ -49,7 +48,7 @@ class APIC:
         self.lower = self.boundary_width * self.dx
         self.upper = 1 - self.lower
 
-        # Now we can initialize the colliding boundary (or bounding box) around the domain
+        # Now we can initialize the colliding boundary (or bounding box) around the domain:
         self.initialize_boundary()
 
     @ti.func
@@ -86,17 +85,18 @@ class APIC:
     def reset_grids(self):
         for i, j in self.velocity_x:
             self.velocity_x[i, j] = 0
-            # self.volume_x[i, j] = 0
+            self.volume_x[i, j] = 0
             self.mass_x[i, j] = 0
 
         for i, j in self.velocity_y:
             self.velocity_y[i, j] = 0
-            # self.volume_y[i, j] = 0
+            self.volume_y[i, j] = 0
             self.mass_y[i, j] = 0
 
     @ti.kernel
     def classify_cells(self):
         for i, j in self.classification_c:
+            # Reset all the cells that don't belong to the colliding boundary:
             if not self.is_colliding(i, j):
                 self.classification_c[i, j] = Classification.Empty
 
@@ -120,28 +120,28 @@ class APIC:
             # Lower left corner of the interpolation grid:
             base_x = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.0, 0.5]) - 0.5), ti.i32)
             base_y = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.5, 0.0]) - 0.5), ti.i32)
-            # base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
+            base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
 
             # Distance between lower left corner and particle position:
             dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - ti.Vector([0.0, 0.5])
             dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - ti.Vector([0.5, 0.0])
-            # dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32) - ti.Vector([0.5, 0.0])
+            dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32) - ti.Vector([0.5, 0.0])
 
             # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2)
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
-            # w_c = [0.5 * (1.5 - dist_c) ** 2, 0.75 - (dist_c - 1) ** 2, 0.5 * (dist_c - 0.5) ** 2]
+            w_c = [0.5 * (1.5 - dist_c) ** 2, 0.75 - (dist_c - 1) ** 2, 0.5 * (dist_c - 0.5) ** 2]
 
             for i, j in ti.static(ti.ndrange(3, 3)):  # Loop over 3x3 grid node neighborhood
                 offset = ti.Vector([i, j])
                 weight_x = w_x[i][0] * w_x[j][1]
                 weight_y = w_y[i][0] * w_y[j][1]
-                # weight_c = w_c[i][0] * w_c[j][1]
+                weight_c = w_c[i][0] * w_c[j][1]
 
                 self.mass_x[base_x + offset] += weight_x
                 self.mass_y[base_y + offset] += weight_y
-                # self.mass_c[base_c + offset] += weight_c
+                self.mass_c[base_c + offset] += weight_c
 
                 dpos_x = ti.cast(offset - dist_x, ti.f32) * self.dx
                 dpos_y = ti.cast(offset - dist_y, ti.f32) * self.dx
@@ -155,14 +155,8 @@ class APIC:
         for i, j in self.velocity_x:
             if (mass := self.mass_x[i, j]) > 0:
                 self.velocity_x[i, j] /= mass
-
-                collision_right = i >= (self.n_grid - self.boundary_width) # and self.velocity_x[i, j] > 0
-                collision_left = i <= self.boundary_width # and self.velocity_x[i, j] < 0
-
-                # collision_right = self.is_colliding(i + 1, j) and self.velocity_x[i, j] > 0
-                # collision_left = self.is_colliding(i, j) and self.velocity_x[i, j] < 0
-
-                # if not (self.boundary_width <= i < self.n_grid - self.boundary_width):
+                collision_right = i >= (self.n_grid - self.boundary_width) and self.velocity_x[i, j] > 0
+                collision_left = i <= self.boundary_width and self.velocity_x[i, j] < 0
                 if collision_left or collision_right:
                     self.velocity_x[i, j] = 0
 
@@ -170,54 +164,40 @@ class APIC:
             if (mass := self.mass_y[i, j]) > 0:
                 self.velocity_y[i, j] /= mass
                 self.velocity_y[i, j] += GRAVITY * self.dt
-
-                # collision_bottom = self.is_colliding(i, j - 1) and self.velocity_y[i, j] < 0
-                # collision_top = self.is_colliding(i, j) and self.velocity_y[i, j] > 0
-
-                collision_top = j >= (self.n_grid - self.boundary_width) # and self.velocity_y[i, j] > 0
-                collision_bottom = j <= self.boundary_width # and self.velocity_y[i, j] < 0
-
-                # is_colliding |= not (self.boundary_width <= j < self.n_grid - self.boundary_width)
-                # if not (self.boundary_width <= j < self.n_grid - self.boundary_width):
+                collision_top = j >= (self.n_grid - self.boundary_width) and self.velocity_y[i, j] > 0
+                collision_bottom = j <= self.boundary_width and self.velocity_y[i, j] < 0
                 if collision_top or collision_bottom:
                     self.velocity_y[i, j] = 0
 
-    # @ti.kernel
-    # def compute_volumes(self):
-    #     for i, j in self.classification_c:
-    #         if self.is_interior(i, j):
-    #             control_volume = 0.5 * self.dx * self.dx
-    #             self.volume_x[i + 1, j] += control_volume
-    #             self.volume_y[i, j + 1] += control_volume
-    #             self.volume_x[i, j] += control_volume
-    #             self.volume_y[i, j] += control_volume
+    @ti.kernel
+    def compute_volumes(self):
+        # FIXME: this control volume doesn't help with the density correction
+        control_volume = 0.5 * self.dx * self.dx
+        for i, j in self.classification_c:
+            if self.is_interior(i, j):
+                self.volume_x[i + 1, j] += control_volume
+                self.volume_x[i, j] += control_volume
+                self.volume_y[i, j + 1] += control_volume
+                self.volume_y[i, j] += control_volume
 
     @ti.kernel
     def fill_pressure_system(self, A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray()):  # pyright: ignore
-        coefficient = self.rho * self.dx * self.inv_dt
+        coefficient = self.dt * self.inv_dx * self.inv_dx
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
-            center_entry = 0.0  # to keep max_num_triplets as low as possible
+            center = 0.0  # to keep max_num_triplets as low as possible
             idx = (i * self.n_grid) + j  # raveled index
             if self.is_interior(i, j):
                 # Build the right-hand side of the linear system.
                 # This uses a modified divergence, where the velocities of faces
                 # bordering colliding (solid) cells are considered to be zero.
                 if not self.is_colliding(i + 1, j):
-                    # rho = self.mass_x[i + 1, j] / self.volume_x[i + 1, j]
-                    # z = rho * self.dx * self.inv_dt
-                    b[idx] += coefficient * self.velocity_x[i + 1, j]
+                    b[idx] += self.inv_dx * self.velocity_x[i + 1, j]
                 if not self.is_colliding(i - 1, j):
-                    # rho = self.mass_x[i, j] / self.volume_x[i, j]
-                    # z = rho * self.dx * self.inv_dt
-                    b[idx] -= coefficient * self.velocity_x[i, j]
+                    b[idx] -= self.inv_dx * self.velocity_x[i, j]
                 if not self.is_colliding(i, j + 1):
-                    # rho = self.mass_y[i, j + 1] / self.volume_y[i, j + 1]
-                    # z = rho * self.dx * self.inv_dt
-                    b[idx] += coefficient * self.velocity_y[i, j + 1]
+                    b[idx] += self.inv_dx * self.velocity_y[i, j + 1]
                 if not self.is_colliding(i, j - 1):
-                    # rho = self.mass_y[i, j] / self.volume_y[i, j]
-                    # z = rho * self.dx * self.inv_dt
-                    b[idx] -= coefficient * self.velocity_y[i, j]
+                    b[idx] -= self.inv_dx * self.velocity_y[i, j]
 
                 # We will apply a Neumann boundary condition on the colliding faces,
                 # to guarantee zero flux into colliding cells, by just not adding these
@@ -227,26 +207,30 @@ class APIC:
                 #   => idx(i - 1, j) = ((i - 1) * n) + j = (i * n) + j - n = idx(i, j) - n
                 #   => idx(i, j - 1) = (i * n) + j - 1 = idx(i, j) - 1, etc.
                 if not self.is_colliding(i - 1, j):
-                    center_entry -= 1.0
+                    inv_rho = self.volume_x[i, j] / self.mass_x[i, j]
+                    center -= coefficient * inv_rho
                     if not self.is_empty(i - 1, j):
-                        A[idx, idx - self.n_grid] += 1.0
+                        A[idx, idx - self.n_grid] += coefficient * inv_rho
 
                 if not self.is_colliding(i + 1, j):
-                    center_entry -= 1.0
+                    inv_rho = self.volume_x[i + 1, j] / self.mass_x[i + 1, j]
+                    center -= coefficient * inv_rho
                     if not self.is_empty(i + 1, j):
-                        A[idx, idx + self.n_grid] += 1.0
+                        A[idx, idx + self.n_grid] += coefficient * inv_rho
 
                 if not self.is_colliding(i, j - 1):
-                    center_entry -= 1.0
+                    inv_rho = self.volume_y[i, j] / self.mass_y[i, j]
+                    center -= coefficient * inv_rho
                     if not self.is_empty(i, j - 1):
-                        A[idx, idx - 1] += 1.0
+                        A[idx, idx - 1] += coefficient * inv_rho
 
                 if not self.is_colliding(i, j + 1):
-                    center_entry -= 1.0
+                    inv_rho = self.volume_y[i, j + 1] / self.mass_y[i, j + 1]
+                    center -= coefficient * inv_rho
                     if not self.is_empty(i, j + 1):
-                        A[idx, idx + 1] += 1.0
+                        A[idx, idx + 1] += coefficient * inv_rho
 
-                A[idx, idx] += center_entry
+                A[idx, idx] += center
 
             else:  # Homogeneous Dirichlet boundary condition.
                 A[idx, idx] += 1.0
@@ -254,17 +238,19 @@ class APIC:
 
     @ti.kernel
     def apply_pressure(self, pressure: ti.types.ndarray()):  # pyright: ignore
-        coefficient = self.dt / (self.dx * self.rho)
+        coefficient = self.dt * self.inv_dx
         for i, j in ti.ndrange(self.n_grid, self.n_grid):
             idx = i * self.n_grid + j
             if self.is_interior(i - 1, j) or self.is_interior(i, j):
                 if not (self.is_colliding(i - 1, j) or self.is_colliding(i, j)):
                     pressure_gradient = pressure[idx] - pressure[idx - self.n_grid]
-                    self.velocity_x[i, j] -= coefficient * pressure_gradient
+                    inv_rho = self.volume_x[i, j] / self.mass_x[i, j]
+                    self.velocity_x[i, j] -= inv_rho * coefficient * pressure_gradient
             if self.is_interior(i, j - 1) or self.is_interior(i, j):
                 if not (self.is_colliding(i, j - 1) or self.is_colliding(i, j)):
                     pressure_gradient = pressure[idx] - pressure[idx - 1]
-                    self.velocity_y[i, j] -= coefficient * pressure_gradient
+                    inv_rho = self.volume_y[i, j] / self.mass_y[i, j]
+                    self.velocity_y[i, j] -= inv_rho * coefficient * pressure_gradient
 
     def correct_pressure(self):
         n_cells = self.n_grid * self.n_grid
@@ -337,9 +323,9 @@ class APIC:
         # TODO: find good ratio of timestep and iterations per timestep
         for _ in range(4):
             self.reset_grids()
-            self.classify_cells()
             self.particle_to_grid()
+            self.classify_cells()
             self.momentum_to_velocity()
-            # self.compute_volumes()
+            self.compute_volumes()
             self.correct_pressure()
             self.grid_to_particle()
