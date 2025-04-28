@@ -209,25 +209,25 @@ class APIC:
                 if not self.is_colliding(i - 1, j):
                     inv_rho = self.volume_x[i, j] / self.mass_x[i, j]
                     center -= coefficient * inv_rho
-                    if not self.is_empty(i - 1, j):
+                    if self.is_interior(i - 1, j):
                         A[idx, idx - self.n_grid] += coefficient * inv_rho
 
                 if not self.is_colliding(i + 1, j):
                     inv_rho = self.volume_x[i + 1, j] / self.mass_x[i + 1, j]
                     center -= coefficient * inv_rho
-                    if not self.is_empty(i + 1, j):
+                    if self.is_interior(i + 1, j):
                         A[idx, idx + self.n_grid] += coefficient * inv_rho
 
                 if not self.is_colliding(i, j - 1):
                     inv_rho = self.volume_y[i, j] / self.mass_y[i, j]
                     center -= coefficient * inv_rho
-                    if not self.is_empty(i, j - 1):
+                    if self.is_interior(i, j - 1):
                         A[idx, idx - 1] += coefficient * inv_rho
 
                 if not self.is_colliding(i, j + 1):
                     inv_rho = self.volume_y[i, j + 1] / self.mass_y[i, j + 1]
                     center -= coefficient * inv_rho
-                    if not self.is_empty(i, j + 1):
+                    if self.is_interior(i, j + 1):
                         A[idx, idx + 1] += coefficient * inv_rho
 
                 A[idx, idx] += center
