@@ -17,16 +17,6 @@ parser.add_argument(
     type=int,
 )
 
-solver_type_help = "Choose whether to use a direct or iterative solver for solving the pressure equation."
-parser.add_argument(
-    "-s",
-    "--solverType",
-    default="Iterative",
-    nargs="?",
-    choices=["Direct", "Iterative"],
-    help=solver_type_help,
-)
-
 quality_help = "Choose a quality multiplicator for the simulation (higher is better)."
 parser.add_argument(
     "-q",
@@ -43,12 +33,11 @@ parser.add_argument(
     "--arch",
     default="CPU",
     nargs="?",
-    choices=["CPU", "GPU", "CUDA"],
+    choices=["CPU", "CUDA"],
     help=solver_type_help,
 )
 
 arguments = parser.parse_args()
 
 # Parsed constants:
-should_use_direct_solver = arguments.solverType.lower() == "direct"
 should_use_cuda_backend = arguments.arch.lower() == "cuda"

@@ -1,33 +1,27 @@
 from src.parsing import arguments, should_use_cuda_backend
-from src.poisson_disk import PoissonDiskSampler
 from src.presets import configuration_list
 from src.simulation import Simulation
-from src.apic_solver import APIC
 
 import taichi as ti
 
 
 def main():
     # Initialize Taichi on the chosen architecture:
-    if should_use_cuda_backend:
-        ti.init(arch=ti.cuda, debug=False)
-    else:
-        ti.init(arch=ti.cpu, debug=True)
-        # ti.init(arch=ti.gpu, debug=False)
+    ti.init(arch=ti.cuda if should_use_cuda_backend else ti.cpu, debug=False)
 
-    apic_solver = APIC(quality=arguments.quality, max_particles=100_000)
-    poisson_disk_sampler = PoissonDiskSampler(apic_solver=apic_solver)
-
-    simulation_name = "APIC"
     initial_configuration = arguments.configuration % len(configuration_list)
+    simulation_name = "APIC"
+    radius = 0.0018
+
     simulation = Simulation(
         initial_configuration=initial_configuration,
-        poisson_disk_sampler=poisson_disk_sampler,
         configurations=configuration_list,
+        quality=arguments.quality,
         name=simulation_name,
-        apic_solver=apic_solver,
         res=(720, 720),
+        radius=radius,
     )
+
     simulation.run()
 
     print("\n", "#" * 100, sep="")
