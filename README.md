@@ -7,8 +7,8 @@ Implementation of the [The Affine Particle-In-Cell Method](https://doi.org/10.11
 </p>
 -->
 
+![video-ezgif com-optimize (1)](https://github.com/user-attachments/assets/7a237a82-fd0f-4055-885c-54f443c6fefc)
 
-![spout-ezgif com-optimize](https://github.com/user-attachments/assets/747153a1-90e8-4462-be5a-e2413c021f92)
 
 ### Installation
 Dependencies are managed with Conda:
