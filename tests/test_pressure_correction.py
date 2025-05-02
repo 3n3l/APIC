@@ -40,14 +40,10 @@ class TestSimulation(Simulation):
         for i, j in self.solver.mass_c:
             div[i, j] = 0
             if self.solver.is_interior(i, j):
-                if not self.solver.is_colliding(i + 1, j):
-                    div[i, j] += self.solver.velocity_x[i + 1, j]
-                if not self.solver.is_colliding(i - 1, j):
-                    div[i, j] -= self.solver.velocity_x[i, j]
-                if not self.solver.is_colliding(i, j + 1):
-                    div[i, j] += self.solver.velocity_y[i, j + 1]
-                if not self.solver.is_colliding(i, j - 1):
-                    div[i, j] -= self.solver.velocity_y[i, j]
+                div[i, j] += self.solver.velocity_x[i + 1, j]
+                div[i, j] -= self.solver.velocity_x[i, j]
+                div[i, j] += self.solver.velocity_y[i, j + 1]
+                div[i, j] -= self.solver.velocity_y[i, j]
 
     def run(self) -> None:
         for i in range(1, 301):
