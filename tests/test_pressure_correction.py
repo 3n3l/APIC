@@ -1,42 +1,46 @@
 import utils  # import first to append parent directory to path
 
-from src.configurations import Configuration, Rectangle, Circle
 from src.poisson_disk import PoissonDiskSampler
-
+from src.configurations import Configuration
 from src.presets import configuration_list
-from src.constants import Classification
 from src.simulation import Simulation
-from src.apic_solver import APIC
 from src.parsing import arguments
+from src.apic_solver import APIC
 
 import taichi as ti
 import numpy as np
 
-offset = 0.0234375
+MAX_ITERATIONS = 300
+LOWER_BOUND = -1e-6
+UPPER_BOUND = 1e-6
 
-class TestSimulation(Simulation):
-    def __init__(self, configurations: list[Configuration], initial_configuration: int = 0) -> None:
-        # State.
-        self.is_paused = True
-        self.should_write_to_disk = False
-        self.is_showing_settings = not self.is_paused
 
-        # Sampler and solver.
-        self.solver = APIC(quality=arguments.quality, max_particles=100_000)
-        self.sampler = PoissonDiskSampler(apic_solver=self.solver, r=0.0018, k=300)
+def print_wrt_bound(value: float) -> str:
+    if value < LOWER_BOUND or value > UPPER_BOUND:
+        return utils.print_red(str(value))
+    else:
+        return utils.print_green(str(value))
 
-        # Load the initial configuration and reset the solver to this configuration.
+
+class TestRenderer(Simulation):
+    def __init__(self, configurations: list[Configuration]) -> None:
+        self.solver = APIC(quality=arguments.quality, max_particles=300_000)
+        self.sampler = PoissonDiskSampler(apic_solver=self.solver, r=0.002, k=100)
+
+        # Load the initial configuration and reset the solver to this configuration:
         self.current_frame = 0
+        self.configuration_id = 0
         self.configurations = configurations
-        self.configuration_id = initial_configuration
         self.load_configuration(configurations[self.configuration_id])
 
         # Fields for testing:
-        self.divergence = ti.ndarray(ti.f32, shape=(self.solver.n_grid, self.solver.n_grid))
-        self.we_succeeded = True
+        self.total_divergence = ti.ndarray(ti.f32, shape=(self.solver.n_grid, self.solver.n_grid))
+        self.curr_divergence = ti.ndarray(ti.f32, shape=(self.solver.n_grid, self.solver.n_grid))
+        self.max_divergence = 0
+        self.min_divergence = 0
 
     @ti.kernel
-    def compute_divergence(self, div: ti.types.ndarray()):  # pyright: ignore
+    def compute_divergence(self, div: ti.types.ndarray(), avg: ti.types.ndarray()):  # pyright: ignore
         for i, j in self.solver.mass_c:
             div[i, j] = 0
             if self.solver.is_interior(i, j):
@@ -44,62 +48,62 @@ class TestSimulation(Simulation):
                 div[i, j] -= self.solver.velocity_x[i, j]
                 div[i, j] += self.solver.velocity_y[i, j + 1]
                 div[i, j] -= self.solver.velocity_y[i, j]
+                avg[i, j] += div[i, j]
 
     def run(self) -> None:
-        for i in range(1, 301):
+        self.total_divergence.fill(0)
+        self.max_divergence = 0
+        self.min_divergence = 0
+
+        for i in range(MAX_ITERATIONS):
             self.substep()
-            prev_min = np.round(np.abs(np.min(self.divergence.to_numpy())))
-            prev_max = np.round(np.abs(np.max(self.divergence.to_numpy())))
-            self.compute_divergence(self.divergence)
-            curr_min = np.round(np.abs(np.min(self.divergence.to_numpy())))
-            curr_max = np.round(np.abs(np.max(self.divergence.to_numpy())))
+            self.compute_divergence(self.curr_divergence, self.total_divergence)
 
             print(".", end=("\n" if i % 10 == 0 else " "), flush=True)
 
-            if curr_min > prev_min or curr_max > prev_max:
-                # The solver actually increased the divergence :(
-                print("\n\nDivergence increased :(")
-                print(f"prev_min = {prev_min}, prev_max = {prev_max}")
-                print(f"curr_min = {curr_min}, curr_max = {curr_max}")
-                self.we_succeeded = False
-                break
-
-            if np.any(np.round(self.divergence.to_numpy(), 2) != 0):
-                print(f"\n\nDivergence too big :(")
-                self.we_succeeded = False
-                break
-
-            if not self.we_succeeded:
-                break
+            divergence = self.curr_divergence.to_numpy()
+            abs_curr_min = np.min(divergence)
+            if abs_curr_min < self.min_divergence:
+                self.min_divergence = np.min(divergence)
+            abs_curr_max = np.abs(np.max(divergence))
+            if abs_curr_max > np.abs(self.max_divergence):
+                self.max_divergence = np.max(divergence)
 
 
 def main() -> None:
     # Initialize Taichi on the chosen architecture:
     if arguments.arch.lower() == "cpu":
-        ti.init(arch=ti.cpu, debug=True, verbose=False)
+        ti.init(arch=ti.cpu, debug=False, verbose=False, log_level=ti.INFO)
     elif arguments.arch.lower() == "gpu":
-        ti.init(arch=ti.gpu, debug=True)
+        ti.init(arch=ti.gpu, debug=arguments.debug)
     else:
-        ti.init(arch=ti.cuda, debug=True)
+        ti.init(arch=ti.cuda, debug=arguments.debug)
 
-    test_simulation = TestSimulation(
-        initial_configuration=arguments.configuration,
-        configurations=configuration_list,
-    )
+    test_renderer = TestRenderer(configurations=configuration_list)
 
+    results = []
+    all_tests_succeeded = True
     for configuration in configuration_list:
         print(f"NOW RUNNING: {configuration.name}")
-        test_simulation.load_configuration(configuration)
-        test_simulation.run()
-        if not test_simulation.we_succeeded:
-            break
+        test_renderer.load_configuration(configuration)
+        test_renderer.run()
 
-    print("\n")
-    print("Divergence, min ->", np.min(test_simulation.divergence.to_numpy()))
-    print("Divergence, max ->", np.max(test_simulation.divergence.to_numpy()))
-    print()
+        average_divergence = test_renderer.total_divergence.to_numpy() / MAX_ITERATIONS
+        min_average, max_average = np.min(average_divergence), np.max(average_divergence)
+        min_spiking, max_spiking = test_renderer.min_divergence, test_renderer.max_divergence
+        test_succeeded = min_average > LOWER_BOUND and max_average < UPPER_BOUND
+        all_tests_succeeded &= test_succeeded
+        result = (
+            f"{configuration.name}\n"
+            f"-> average min, max = {print_wrt_bound(min_average)}, {print_wrt_bound(max_average)}\n"
+            f"-> spiking min, max = {print_wrt_bound(min_spiking)}, {print_wrt_bound(max_spiking)}\n"
+            f"-> {utils.print_green("PASSED!") if test_succeeded else utils.print_red("DID NOT PASS!")}\n"
+        )
+        results.append(result)
 
-    print("\033[92m:)))))))))\033[0m" if test_simulation.we_succeeded else "\033[91m:(\033[0m")
+    print(f"\n\niterations = {MAX_ITERATIONS}, lower bound = {LOWER_BOUND}, upper bound = {UPPER_BOUND}\n")
+    print(*results, sep="\n", end="\n\n")
+    print("\033[92m:)))))))))\033[0m" if all_tests_succeeded else "\033[91m:(\033[0m")
 
 
 if __name__ == "__main__":
