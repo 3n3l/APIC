@@ -41,7 +41,7 @@ class TestRenderer(Simulation):
 
     @ti.kernel
     def compute_divergence(self, div: ti.types.ndarray(), avg: ti.types.ndarray()):  # pyright: ignore
-        for i, j in self.solver.mass_c:
+        for i, j in ti.ndrange(self.solver.n_grid, self.solver.n_grid):
             div[i, j] = 0
             if self.solver.is_interior(i, j):
                 div[i, j] += self.solver.velocity_x[i + 1, j]

@@ -32,7 +32,7 @@ class APIC:
 
         # Properties on MAC-cells:
         self.classification_c = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid))
-        self.mass_c = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid))
+        # self.mass_c = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid))
 
         # Properties on particles:
         self.position_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
@@ -120,28 +120,28 @@ class APIC:
             # Lower left corner of the interpolation grid:
             base_x = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.0, 0.5]) - 0.5), ti.i32)
             base_y = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.5, 0.0]) - 0.5), ti.i32)
-            base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
+            # base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
 
             # Distance between lower left corner and particle position:
             dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - ti.Vector([0.0, 0.5])
             dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - ti.Vector([0.5, 0.0])
-            dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32) - ti.Vector([0.5, 0.0])
+            # dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32)
 
             # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2)
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
-            w_c = [0.5 * (1.5 - dist_c) ** 2, 0.75 - (dist_c - 1) ** 2, 0.5 * (dist_c - 0.5) ** 2]
+            # w_c = [0.5 * (1.5 - dist_c) ** 2, 0.75 - (dist_c - 1) ** 2, 0.5 * (dist_c - 0.5) ** 2]
 
             for i, j in ti.static(ti.ndrange(3, 3)):  # Loop over 3x3 grid node neighborhood
                 offset = ti.Vector([i, j])
                 weight_x = w_x[i][0] * w_x[j][1]
                 weight_y = w_y[i][0] * w_y[j][1]
-                weight_c = w_c[i][0] * w_c[j][1]
+                # weight_c = w_c[i][0] * w_c[j][1]
 
                 self.mass_x[base_x + offset] += weight_x
                 self.mass_y[base_y + offset] += weight_y
-                self.mass_c[base_c + offset] += weight_c
+                # self.mass_c[base_c + offset] += weight_c
 
                 dpos_x = ti.cast(offset - dist_x, ti.f32) * self.dx
                 dpos_y = ti.cast(offset - dist_y, ti.f32) * self.dx
