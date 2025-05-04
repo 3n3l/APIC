@@ -18,10 +18,10 @@ configuration_list = [
                 Rectangle(
                     size=(0.04, 0.04),
                     velocity=(0, -3),
-                    lower_left=(0.48, 0.48),
+                    lower_left=(0.48, 0.68),
                     frame_threshold=i,
                 )
-                for i in range(1, 200)
+                for i in range(1, 300)
             ],
         ],
     ),
@@ -39,12 +39,12 @@ configuration_list = [
         name="Simple Spout Source [Water]",
         geometries=[
             Rectangle(
-                lower_left=(0.48, 0.48),
+                lower_left=(0.48, 0.68),
                 velocity=(0, -3),
                 size=(0.04, 0.04),
                 frame_threshold=i,
             )
-            for i in range(1, 200)
+            for i in range(1, 300)
         ],
     ),
     Configuration(
