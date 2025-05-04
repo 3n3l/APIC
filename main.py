@@ -10,8 +10,8 @@ def main():
     ti.init(arch=ti.cuda if should_use_cuda_backend else ti.cpu, debug=False)
 
     initial_configuration = arguments.configuration % len(configuration_list)
-    simulation_name = "APIC"
-    radius = 0.0018
+    simulation_name = "Affine Particle-In-Cell Method"
+    radius = 0.001
 
     simulation = Simulation(
         initial_configuration=initial_configuration,
