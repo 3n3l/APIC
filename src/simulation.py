@@ -15,9 +15,10 @@ class Simulation:
         self,
         configurations: list[Configuration],
         initial_configuration: int,
+        poisson_disk_sampler: PoissonDiskSampler,
+        apic_solver: APIC,
         res: tuple[int, int],
         radius: float,
-        quality: int,
         name: str,
     ) -> None:
         # State.
@@ -26,8 +27,8 @@ class Simulation:
         self.is_showing_settings = not self.is_paused
 
         # Sampler and solver.
-        self.solver = APIC(quality=quality, max_particles=100_000)
-        self.sampler = PoissonDiskSampler(apic_solver=self.solver, r=(1.5 * radius), k=300)
+        self.solver = apic_solver
+        self.sampler = poisson_disk_sampler
 
         # Create a parent directory, more directories will be created inside this
         # directory that contain newly created frames, videos and GIFs.
