@@ -283,39 +283,27 @@ class APIC:
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
-            grad_w_x = [dist_x - 1.5, (-2) * (dist_x - 1), dist_x - 0.5]
-            grad_w_y = [dist_y - 1.5, (-2) * (dist_y - 1), dist_y - 0.5]
 
             next_velocity = ti.Vector.zero(ti.f32, 2)
-            # b_x = ti.Vector.zero(ti.f32, 2)
-            # b_y = ti.Vector.zero(ti.f32, 2)
-            cx = ti.Vector.zero(ti.f32, 2)
-            cy = ti.Vector.zero(ti.f32, 2)
+            b_x = ti.Vector.zero(ti.f32, 2)
+            b_y = ti.Vector.zero(ti.f32, 2)
             for i, j in ti.static(ti.ndrange(3, 3)):  # Loop over 3x3 grid node neighborhood
-                grad_weight_x = ti.Vector([grad_w_x[i][0] * w_x[j][1], w_x[i][0] * grad_w_x[j][1]])
-                grad_weight_y = ti.Vector([grad_w_y[i][0] * w_y[j][1], w_y[i][0] * grad_w_y[j][1]])
                 x_weight = w_x[i][0] * w_x[j][1]
                 y_weight = w_y[i][0] * w_y[j][1]
                 offset = ti.Vector([i, j])
-                # dpos_x = ti.cast(offset, ti.f32) - dist_x
-                # dpos_y = ti.cast(offset, ti.f32) - dist_y
+                dpos_x = ti.cast(offset, ti.f32) - dist_x
+                dpos_y = ti.cast(offset, ti.f32) - dist_y
                 x_velocity = x_weight * self.velocity_x[base_x + offset]
                 y_velocity = y_weight * self.velocity_y[base_y + offset]
                 next_velocity += [x_velocity, y_velocity]
-                # b_x += x_velocity * dpos_x
-                # b_y += y_velocity * dpos_y
-                cx += self.velocity_x[base_x + offset] * grad_weight_x
-                cy += self.velocity_y[base_y + offset] * grad_weight_y
+                b_x += x_velocity * dpos_x
+                b_y += y_velocity * dpos_y
 
-            # TODO: return to computing bx, by instead of using the weight gradients
-            # NOTE: We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
-            #       this avoids computing the weight gradients.
-            # NOTE: C = B @ (D^(-1)), one inv_dx is cancelled with one dx in dpos,
-            #       D^(-1) is constant scaling for cubic kernels.
-            # self.cx_p[p] = 4 * self.inv_dx * b_x
-            # self.cy_p[p] = 4 * self.inv_dx * b_y
-            self.cx_p[p] = cx
-            self.cy_p[p] = cy
+            # We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
+            # this avoids computing the weight gradients and results in less dissipation.
+            # C = B @ (D^(-1)), NOTE: one inv_dx is cancelled with one dx in dpos.
+            self.cx_p[p] = 4 * self.inv_dx * b_x
+            self.cy_p[p] = 4 * self.inv_dx * b_y
             self.position_p[p] += self.dt * next_velocity
             self.velocity_p[p] = next_velocity
 
