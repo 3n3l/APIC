@@ -130,10 +130,14 @@ class Simulation:
         date = datetime.now().strftime("%d%m%Y_%H%M%S")
         output_dir = f"{self.parent_dir}/{date}"
         os.makedirs(output_dir)
+        # TODO: the videomanager takes a postprocessing field,
+        #       which just manipulates an ndarray and could be used to
+        #       make the background transparent.
         self.video_manager = ti.tools.VideoManager(
+            video_filename=f"APIC_{date}",
             output_dir=output_dir,
-            framerate=60,
             automatic_build=False,
+            framerate=60,
         )
 
     def create_video(self) -> None:
@@ -217,9 +221,17 @@ class Simulation:
 
     def run(self) -> None:
         """Runs this simulation."""
+        # TODO: move the iteration stuff to own method,
+        #       let the user control how many frames should be recorded
+        #       (framerate, gif-creation, video-creation could also all be controlled)
+        # iteration = 0
         while self.window.running:
+            # if iteration == 900:
+            #     self.create_video()
+            #     self.window.running = False
             self.handle_events()
             self.show_settings()
             if not self.is_paused:
                 self.substep()
+                # iteration += 1
             self.render()
