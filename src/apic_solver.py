@@ -32,7 +32,6 @@ class APIC:
 
         # Properties on MAC-cells:
         self.classification_c = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid))
-        # self.mass_c = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid))
 
         # Properties on particles:
         self.position_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
@@ -141,7 +140,6 @@ class APIC:
 
                 self.mass_x[base_x + offset] += weight_x
                 self.mass_y[base_y + offset] += weight_y
-                # self.mass_c[base_c + offset] += weight_c
 
                 dpos_x = ti.cast(offset - dist_x, ti.f32) * self.dx
                 dpos_y = ti.cast(offset - dist_y, ti.f32) * self.dx
