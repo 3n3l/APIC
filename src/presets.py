@@ -7,7 +7,7 @@ offset = 0.0234375  # n_grid = 3, quality = 1
 
 configuration_list = [
     Configuration(
-        name="Waterspout Hits Body of Water [Water]",
+        name="Waterjet Hits Pool",
         geometries=[
             Rectangle(
                 lower_left=(0.0, 0.0),
@@ -17,8 +17,8 @@ configuration_list = [
             *[
                 Rectangle(
                     size=(0.04, 0.04),
-                    velocity=(0, -3),
-                    lower_left=(0.48, 0.68),
+                    velocity=(0, -2),
+                    lower_left=(0.48, 0.8),
                     frame_threshold=i,
                 )
                 for i in range(1, 300)
@@ -26,7 +26,7 @@ configuration_list = [
         ],
     ),
     Configuration(
-        name="Dam Break [Water]",
+        name="Dam Break",
         geometries=[
             Rectangle(
                 lower_left=(offset, offset),
@@ -36,11 +36,11 @@ configuration_list = [
         ],
     ),
     Configuration(
-        name="Simple Spout Source [Water]",
+        name="Waterjet",
         geometries=[
             Rectangle(
-                lower_left=(0.48, 0.68),
-                velocity=(0, -3),
+                lower_left=(0.48, 0.8),
+                velocity=(0, -2),
                 size=(0.04, 0.04),
                 frame_threshold=i,
             )
@@ -48,11 +48,17 @@ configuration_list = [
         ],
     ),
     Configuration(
-        name="Spherefall [Water]",
-        geometries=[Circle(center=(0.5, 0.35), velocity=(0, -2), radius=0.08)],
+        name="Spherefall",
+        geometries=[
+            Circle(
+                center=(0.5, 0.5),
+                velocity=(0, -1),
+                radius=0.1,
+            ),
+        ],
     ),
     Configuration(
-        name="Stationary Pool [Water]",
+        name="Stationary Pool",
         geometries=[
             Rectangle(
                 lower_left=(offset, offset),
@@ -63,5 +69,5 @@ configuration_list = [
     ),
 ]
 
-# Sort by length in descending order:
-configuration_list.sort(key=lambda c: len(c.name), reverse=True)
+# Sort alphabetically:
+configuration_list.sort(key=lambda c: str.lower(c.name), reverse=False)
