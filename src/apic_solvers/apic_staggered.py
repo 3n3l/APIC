@@ -1,10 +1,8 @@
 from taichi.linalg import SparseMatrixBuilder, SparseCG
+from src.constants import State, GRAVITY
 from src.apic_solvers import APIC
-from src.constants import State
 
 import taichi as ti
-
-GRAVITY = -9.81
 
 
 @ti.data_oriented

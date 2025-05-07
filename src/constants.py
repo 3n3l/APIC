@@ -13,3 +13,5 @@ class Color:
 class State:
     Active = 0
     Hidden = 1
+
+GRAVITY = -9.81

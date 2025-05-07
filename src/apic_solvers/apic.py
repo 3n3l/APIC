@@ -3,8 +3,6 @@ from abc import abstractmethod
 
 import taichi as ti
 
-GRAVITY = -9.81
-
 
 @ti.data_oriented
 class APIC:
