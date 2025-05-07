@@ -1,4 +1,4 @@
-from src.apic_solver import APIC
+from src.apic_solvers import APIC
 from src.constants import State
 
 import taichi as ti

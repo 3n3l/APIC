@@ -30,7 +30,17 @@ configuration_list = [
         geometries=[
             Rectangle(
                 lower_left=(offset, offset),
-                size=(0.5 - offset, 0.5 - offset),
+                size=(0.3, 0.4),
+                velocity=(0, 0),
+            ),
+        ],
+    ),
+    Configuration(
+        name="Centered Dam Break",
+        geometries=[
+            Rectangle(
+                lower_left=(offset + 0.35, offset),
+                size=(0.3, 0.4),
                 velocity=(0, 0),
             ),
         ],

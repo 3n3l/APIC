@@ -1,7 +1,7 @@
 from src.poisson_disk import PoissonDiskSampler
 from src.configurations import Configuration
 from src.constants import State, Color
-from src.apic_solver import APIC
+from src.apic_solvers import APIC
 
 from datetime import datetime
 
@@ -59,17 +59,6 @@ class Simulation:
 
         self.solver.substep()
 
-    @ti.func
-    def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
-        # Seed from the geometry and given position:
-        self.solver.velocity_p[index] = geometry.velocity
-        self.solver.position_p[index] = position
-
-        # Set properties to default values:
-        self.solver.state_p[index] = State.Active
-        self.solver.cx_p[index] = 0
-        self.solver.cy_p[index] = 0
-
     @ti.kernel
     def add_geometry(self, geometry: ti.template()):  # pyright: ignore
         # Initialize background grid to the current positions:
@@ -81,7 +70,7 @@ class Simulation:
 
         # Find a good initial point for this sample run:
         initial_point = self.sampler.generate_initial_point(geometry)
-        self.add_particle(self.sampler.tail(), initial_point, geometry)
+        self.solver.add_particle(self.sampler.tail(), initial_point, geometry)
         self.sampler.increment_head()
         self.sampler.increment_tail()
 
@@ -94,7 +83,7 @@ class Simulation:
                 next_index = self.sampler.point_to_index(next_position)
                 if self.sampler.point_fits(next_position, geometry):
                     self.sampler.background_grid[next_index] = self.sampler.tail()
-                    self.add_particle(self.sampler.tail(), next_position, geometry)
+                    self.solver.add_particle(self.sampler.tail(), next_position, geometry)
                     self.sampler.increment_tail()  # Increment when point is found
 
         # The head points to the last found position, this is the updated number of particles:

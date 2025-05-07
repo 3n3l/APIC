@@ -1,5 +1,6 @@
 from taichi.linalg import SparseMatrixBuilder, SparseCG
-from src.constants import Classification, State
+from src.apic_solvers import APIC
+from src.constants import State
 
 import taichi as ti
 
@@ -7,18 +8,9 @@ GRAVITY = -9.81
 
 
 @ti.data_oriented
-class APIC:
+class StaggeredAPIC(APIC):
     def __init__(self, quality: int, max_particles: int):
-        self.max_particles = max_particles
-        self.n_grid = 128 * quality
-        self.dx = 1 / self.n_grid
-        self.inv_dx = float(self.n_grid)
-        self.dt = 2e-3 / quality
-        self.inv_dt = 1 / self.dt
-        self.vol_p = (self.dx * 0.5) ** 2
-
-        # Variable properties, must be stored in fields:
-        self.n_particles = ti.field(dtype=ti.int32, shape=())
+        super().__init__(quality, max_particles)
 
         # Properties on MAC-faces:
         self.classification_x = ti.field(dtype=ti.int8, shape=(self.n_grid + 1, self.n_grid))
@@ -30,55 +22,20 @@ class APIC:
         self.mass_x = ti.field(dtype=ti.f32, shape=(self.n_grid + 1, self.n_grid))
         self.mass_y = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid + 1))
 
-        # Properties on MAC-cells:
-        self.classification_c = ti.field(dtype=ti.int8, shape=(self.n_grid, self.n_grid))
-
         # Properties on particles:
-        self.position_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
-        self.velocity_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
         self.cx_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
         self.cy_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
-        self.state_p = ti.field(dtype=ti.f32, shape=max_particles)
-        self.mass_p = ti.field(dtype=ti.f32, shape=max_particles)
-
-        # The width of the simulation boundary in grid nodes and offsets to
-        # guarantee that seeded particles always lie within the boundary:
-        self.boundary_width = 3
-        self.lower = self.boundary_width * self.dx
-        self.upper = 1 - self.lower
-
-        # Now we can initialize the colliding boundary (or bounding box) around the domain:
-        self.initialize_boundary()
 
     @ti.func
-    def in_bounds(self, x: float, y: float) -> bool:
-        return self.lower < x < self.upper and self.lower < y < self.upper
+    def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
+        # Seed from the geometry and given position:
+        self.velocity_p[index] = geometry.velocity
+        self.position_p[index] = position
 
-    @ti.func
-    def is_valid(self, i: int, j: int) -> bool:
-        return i >= 0 and i <= self.n_grid - 1 and j >= 0 and j <= self.n_grid - 1
-
-    @ti.func
-    def is_colliding(self, i: int, j: int) -> bool:
-        return self.is_valid(i, j) and self.classification_c[i, j] == Classification.Colliding
-
-    @ti.func
-    def is_interior(self, i: int, j: int) -> bool:
-        return self.is_valid(i, j) and self.classification_c[i, j] == Classification.Interior
-
-    @ti.func
-    def is_empty(self, i: int, j: int) -> bool:
-        return self.is_valid(i, j) and self.classification_c[i, j] == Classification.Empty
-
-    @ti.kernel
-    def initialize_boundary(self):
-        for i, j in self.classification_c:
-            is_colliding = not (self.boundary_width <= i < self.n_grid - self.boundary_width)
-            is_colliding |= not (self.boundary_width <= j < self.n_grid - self.boundary_width)
-            if is_colliding:
-                self.classification_c[i, j] = Classification.Colliding
-            else:
-                self.classification_c[i, j] = Classification.Empty
+        # Set properties to default values:
+        self.state_p[index] = State.Active
+        self.cx_p[index] = 0
+        self.cy_p[index] = 0
 
     @ti.kernel
     def reset_grids(self):
@@ -93,23 +50,6 @@ class APIC:
             self.mass_y[i, j] = 0
 
     @ti.kernel
-    def classify_cells(self):
-        for i, j in self.classification_c:
-            # Reset all the cells that don't belong to the colliding boundary:
-            if not self.is_colliding(i, j):
-                self.classification_c[i, j] = Classification.Empty
-
-        for p in self.velocity_p:
-            # We ignore uninitialized particles:
-            if self.state_p[p] == State.Hidden:
-                continue
-
-            # Find the nearest cell and set it to interior:
-            i, j = ti.cast(self.position_p[p] * self.inv_dx, int)  # pyright: ignore
-            if not self.is_colliding(i, j):  # pyright: ignore
-                self.classification_c[i, j] = Classification.Interior
-
-    @ti.kernel
     def particle_to_grid(self):
         for p in ti.ndrange(self.n_particles[None]):
             # We ignore uninitialized particles:
@@ -119,28 +59,22 @@ class APIC:
             # Lower left corner of the interpolation grid:
             base_x = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.0, 0.5]) - 0.5), ti.i32)
             base_y = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.5, 0.0]) - 0.5), ti.i32)
-            # base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
 
             # Distance between lower left corner and particle position:
             dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - ti.Vector([0.0, 0.5])
             dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - ti.Vector([0.5, 0.0])
-            # dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32)
 
             # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2)
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
-            # w_c = [0.5 * (1.5 - dist_c) ** 2, 0.75 - (dist_c - 1) ** 2, 0.5 * (dist_c - 0.5) ** 2]
 
             for i, j in ti.static(ti.ndrange(3, 3)):  # Loop over 3x3 grid node neighborhood
                 offset = ti.Vector([i, j])
                 weight_x = w_x[i][0] * w_x[j][1]
                 weight_y = w_y[i][0] * w_y[j][1]
-                # weight_c = w_c[i][0] * w_c[j][1]
-
                 self.mass_x[base_x + offset] += weight_x
                 self.mass_y[base_y + offset] += weight_y
-
                 dpos_x = ti.cast(offset - dist_x, ti.f32) * self.dx
                 dpos_y = ti.cast(offset - dist_y, ti.f32) * self.dx
                 velocity_x = self.velocity_p[p][0] + (self.cx_p[p] @ dpos_x)
@@ -304,7 +238,6 @@ class APIC:
             # C = B @ (D^(-1)), NOTE: one inv_dx is cancelled with one dx in dpos.
             self.cx_p[p] = 4 * self.inv_dx * b_x
             self.cy_p[p] = 4 * self.inv_dx * b_y
-            self.position_p[p] += self.dt * next_velocity
             self.velocity_p[p] = next_velocity
 
     def substep(self) -> None:
@@ -313,6 +246,7 @@ class APIC:
         # TODO: find good ratio of timestep and iterations per timestep
         for _ in range(4):
             self.reset_grids()
+            self.advect_particles()
             self.particle_to_grid()
             self.classify_cells()
             self.momentum_to_velocity()

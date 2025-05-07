@@ -37,7 +37,18 @@ parser.add_argument(
     help=solver_type_help,
 )
 
+solver_type_help = "Choose the grid type (collocated or staggered)"
+parser.add_argument(
+    "-g",
+    "--grid",
+    default="Staggered",
+    nargs="?",
+    choices=["Staggered", "Collocated"],
+    help=solver_type_help,
+)
+
 arguments = parser.parse_args()
 
 # Parsed constants:
 should_use_cuda_backend = arguments.arch.lower() == "cuda"
+should_use_collocated = arguments.grid.lower() == "collocated"

@@ -1,8 +1,8 @@
-from src.parsing import arguments, should_use_cuda_backend
+from src.parsing import arguments, should_use_cuda_backend, should_use_collocated
+from src.apic_solvers import CollocatedAPIC, StaggeredAPIC
 from src.poisson_disk import PoissonDiskSampler
 from src.presets import configuration_list
 from src.simulation import Simulation
-from src.apic_solver import APIC
 
 import taichi as ti
 
@@ -12,12 +12,14 @@ def main():
     ti.init(arch=ti.cuda if should_use_cuda_backend else ti.cpu, debug=False)
 
     initial_configuration = arguments.configuration % len(configuration_list)
-    simulation_name = "Affine Particle-In-Cell Method"
+    simulation_name = f"{'Collocated' if should_use_collocated else 'Staggered'} Affine Particle-In-Cell Method"
 
     # The radius for the particles and the Poisson-Disk Sampler:
     radius = 0.0012
+    quality = 1
+    max_particles = 500_000
 
-    solver = APIC(quality=arguments.quality, max_particles=500_000)
+    solver = CollocatedAPIC(quality, max_particles) if should_use_collocated else StaggeredAPIC(quality, max_particles)
     sampler = PoissonDiskSampler(apic_solver=solver, r=radius * 1.1, k=100)
 
     simulation = Simulation(
