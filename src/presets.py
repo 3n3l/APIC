@@ -16,7 +16,7 @@ configuration_list = [
             ),
             *[
                 Rectangle(
-                    size=(0.04, 0.04),
+                    size=(0.05, 0.05),
                     velocity=(0, -2),
                     lower_left=(0.48, 0.8),
                     frame_threshold=i,
@@ -39,7 +39,7 @@ configuration_list = [
         name="Centered Dam Break",
         geometries=[
             Rectangle(
-                lower_left=(offset + 0.35, offset),
+                lower_left=(0.35, offset),
                 size=(0.3, 0.4),
                 velocity=(0, 0),
             ),
@@ -51,7 +51,7 @@ configuration_list = [
             Rectangle(
                 lower_left=(0.48, 0.8),
                 velocity=(0, -2),
-                size=(0.04, 0.04),
+                size=(0.05, 0.05),
                 frame_threshold=i,
             )
             for i in range(1, 300)
