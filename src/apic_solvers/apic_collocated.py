@@ -187,11 +187,12 @@ class CollocatedAPIC(APIC):
             velocity = ti.Vector.zero(ti.f32, 2)
             B = ti.Matrix.zero(ti.f32, 2, 2)
             for i, j in ti.static(ti.ndrange(3, 3)):  # Loop over 3x3 grid node neighborhood
-                weight_c = w_c[i][0] * w_c[j][1]
                 offset = ti.Vector([i, j])
+                weight_c = w_c[i][0] * w_c[j][1]
+                velocity_c = self.velocity_c[base_c + offset]
+                velocity += weight_c * velocity_c
                 dpos_c = ti.cast(offset, ti.f32) - dist_c
-                velocity += weight_c * self.velocity_c[base_c + offset]
-                B += weight_c * self.velocity_c[base_c + offset].outer_product(dpos_c)
+                B += weight_c * velocity_c.outer_product(dpos_c)
 
             # We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
             # this avoids computing the weight gradients and results in less dissipation.
