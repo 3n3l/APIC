@@ -1,3 +1,6 @@
+from taichi import hex_to_rgb
+
+
 class Classification:
     Colliding = 11
     Interior = 22
@@ -5,10 +8,10 @@ class Classification:
 
 
 class Color:
-    Ice = (0.81, 0.88, 1.0)
-    Water = (0.27, 0.35, 1.0)
-    Background = (0.09, 0.07, 0.07)
-
+    # IBM Carbon
+    Background = hex_to_rgb(0x007d79) # teal 60
+    Water = hex_to_rgb(0x78a9ff) # blue 40
+    Ice = hex_to_rgb(0xd0e2ff) # blue 20
 
 class State:
     Active = 0
