@@ -16,12 +16,12 @@ configuration_list = [
             ),
             *[
                 Rectangle(
-                    size=(0.05, 0.05),
-                    velocity=(0, -2),
-                    lower_left=(0.48, 0.8),
+                    lower_left=(0.48, 0.9),
+                    velocity=(0, -2.5),
+                    size=(0.06, 0.06),
                     frame_threshold=i,
                 )
-                for i in range(1, 300)
+                for i in range(1, 200)
             ],
         ],
     ),
@@ -49,12 +49,12 @@ configuration_list = [
         name="Waterjet",
         geometries=[
             Rectangle(
-                lower_left=(0.48, 0.8),
-                velocity=(0, -2),
-                size=(0.05, 0.05),
+                lower_left=(0.48, 0.9),
+                velocity=(0, -2.5),
+                size=(0.06, 0.06),
                 frame_threshold=i,
             )
-            for i in range(1, 300)
+            for i in range(1, 200)
         ],
     ),
     Configuration(

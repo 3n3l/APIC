@@ -15,12 +15,12 @@ def main():
     simulation_name = f"{'Collocated' if should_use_collocated else 'Staggered'} Affine Particle-In-Cell Method"
 
     # The radius for the particles and the Poisson-Disk Sampler:
-    radius = 0.0012
+    radius = 0.001
     quality = 1
     max_particles = 500_000
 
     solver = CollocatedAPIC(quality, max_particles) if should_use_collocated else StaggeredAPIC(quality, max_particles)
-    sampler = PoissonDiskSampler(apic_solver=solver, r=radius * 1.1, k=100)
+    sampler = PoissonDiskSampler(apic_solver=solver, r=radius, k=50)
 
     simulation = Simulation(
         initial_configuration=initial_configuration,
