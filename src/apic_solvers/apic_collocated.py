@@ -198,8 +198,8 @@ class CollocatedAPIC(APIC):
             # this avoids computing the weight gradients and results in less dissipation.
             # C = B @ (D^(-1)), NOTE: one inv_dx is cancelled with one dx in dpos.
             self.C_p[p] = 4 * self.inv_dx * B
-            self.position_p[p] += self.dt * velocity
             self.velocity_p[p] = velocity
+            self.position_p[p] += self.dt * velocity
 
     def substep(self) -> None:
         # TODO: find good ratio of timestep and iterations per timestep

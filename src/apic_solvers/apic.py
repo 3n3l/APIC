@@ -93,14 +93,6 @@ class APIC:
             else:
                 self.classification_c[i, j] = Classification.Empty
 
-    @ti.kernel
-    def advect_particles(self):
-        for p in self.position_p:
-            # We ignore uninitialized particles:
-            if self.state_p[p] == State.Hidden:
-                continue
-
-            self.position_p[p] += self.dt * self.velocity_p[p]
 
     @ti.kernel
     def classify_cells(self):

@@ -237,6 +237,7 @@ class StaggeredAPIC(APIC):
             self.cx_p[p] = 4 * self.inv_dx * b_x
             self.cy_p[p] = 4 * self.inv_dx * b_y
             self.velocity_p[p] = next_velocity
+            self.position_p[p] += self.dt * next_velocity
 
     def substep(self) -> None:
         # print(int(2e-3 // self.dt))
@@ -244,7 +245,6 @@ class StaggeredAPIC(APIC):
         # TODO: find good ratio of timestep and iterations per timestep
         for _ in range(4):
             self.reset_grids()
-            self.advect_particles()
             self.particle_to_grid()
             self.classify_cells()
             self.momentum_to_velocity()
