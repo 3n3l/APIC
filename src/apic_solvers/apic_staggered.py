@@ -7,8 +7,8 @@ import taichi as ti
 
 @ti.data_oriented
 class StaggeredAPIC(APIC):
-    def __init__(self, quality: int, max_particles: int):
-        super().__init__(quality, max_particles)
+    def __init__(self, max_particles: int, n_grid: int, dt: float):
+        super().__init__(max_particles, n_grid, dt)
 
         # Properties on MAC-faces:
         self.classification_x = ti.field(dtype=ti.int8, shape=(self.n_grid + 1, self.n_grid))
@@ -240,10 +240,7 @@ class StaggeredAPIC(APIC):
             self.position_p[p] += self.dt * next_velocity
 
     def substep(self) -> None:
-        # print(int(2e-3 // self.dt))
-        # for _ in range(int(2e-3 // self.dt)):
-        # TODO: find good ratio of timestep and iterations per timestep
-        for _ in range(4):
+        for _ in range(4 * int(2e-3 // self.dt)):
             self.reset_grids()
             self.particle_to_grid()
             self.classify_cells()

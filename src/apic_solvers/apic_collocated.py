@@ -7,8 +7,8 @@ import taichi as ti
 
 @ti.data_oriented
 class CollocatedAPIC(APIC):
-    def __init__(self, quality: int, max_particles: int):
-        super().__init__(quality, max_particles)
+    def __init__(self, max_particles: int, n_grid: int, dt: float):
+        super().__init__(max_particles, n_grid, dt)
 
         self.rho_0 = 1000 # TODO: implement density correction
 
@@ -202,8 +202,7 @@ class CollocatedAPIC(APIC):
             self.position_p[p] += self.dt * velocity
 
     def substep(self) -> None:
-        # TODO: find good ratio of timestep and iterations per timestep
-        for _ in range(4):
+        for _ in range(4 * int(2e-3 // self.dt)):
             self.reset_grids()
             self.particle_to_grid()
             self.classify_cells()

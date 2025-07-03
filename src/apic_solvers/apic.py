@@ -6,12 +6,12 @@ import taichi as ti
 
 @ti.data_oriented
 class APIC:
-    def __init__(self, quality: int, max_particles: int):
+    def __init__(self, max_particles: int, n_grid: int, dt: float):
         self.max_particles = max_particles
-        self.n_grid = 128 * quality
+        self.n_grid = n_grid
         self.dx = 1 / self.n_grid
         self.inv_dx = float(self.n_grid)
-        self.dt = 2e-3 / quality
+        self.dt = dt
         self.inv_dt = 1 / self.dt
         self.vol_p = (self.dx * 0.5) ** 2
 
@@ -92,7 +92,6 @@ class APIC:
                 self.classification_c[i, j] = Classification.Colliding
             else:
                 self.classification_c[i, j] = Classification.Empty
-
 
     @ti.kernel
     def classify_cells(self):
