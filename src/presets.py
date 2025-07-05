@@ -58,12 +58,22 @@ configuration_list = [
         ],
     ),
     Configuration(
-        name="Spherefall",
+        name="Spherefall [1]",
         geometries=[
             Circle(
                 center=(0.5, 0.5),
                 velocity=(0, -1),
                 radius=0.1,
+            ),
+        ],
+    ),
+    Configuration(
+        name="Spherefall [2]",
+        geometries=[
+            Circle(
+                center=(0.5, 0.5),
+                velocity=(0, 5),
+                radius=0.05,
             ),
         ],
     ),

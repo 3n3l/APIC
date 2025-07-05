@@ -16,7 +16,7 @@ def main():
 
     # The radius for the particles and the Poisson-Disk Sampler:
     radius = 0.001 / arguments.quality
-    max_particles = 500_000  # TODO: this could be computed from radius
+    max_particles = 300_000  # TODO: this could be computed from radius
     n_grid = 128 * arguments.quality
     dt = 2e-3 / arguments.quality
 

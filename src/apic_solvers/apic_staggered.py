@@ -1,4 +1,5 @@
 from taichi.linalg import SparseMatrixBuilder, SparseCG
+from src.apic_solvers.MGPCG import Pressure_MGPCGSolver
 from src.constants import State, GRAVITY
 from src.apic_solvers import APIC
 
@@ -23,6 +24,9 @@ class StaggeredAPIC(APIC):
         # Properties on particles:
         self.cx_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
         self.cy_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
+
+        self.pressure_c = ti.field(dtype=ti.f32, shape=(self.n_grid, self.n_grid))
+        self.pressure_solver = Pressure_MGPCGSolver(self)
 
     @ti.func
     def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
@@ -186,15 +190,46 @@ class StaggeredAPIC(APIC):
                 else:
                     self.velocity_y[i, j] = 0
 
-    def correct_pressure(self):
-        n_cells = self.n_grid * self.n_grid
-        A = SparseMatrixBuilder(max_num_triplets=(5 * n_cells), num_rows=n_cells, num_cols=n_cells, dtype=ti.f32)
-        b = ti.ndarray(ti.f32, shape=n_cells)
-        self.fill_pressure_system(A, b)
+    @ti.kernel
+    def _apply_pressure(self):
+        coefficient = self.dt * self.inv_dx
+        for i, j in ti.ndrange(self.n_grid, self.n_grid):
+            if self.is_interior(i - 1, j) or self.is_interior(i, j):
+                if not (self.is_colliding(i - 1, j) or self.is_colliding(i, j)):
+                    pressure_gradient = self.pressure_c[i, j] - self.pressure_c[i - 1, j]
+                    inv_rho = self.volume_x[i, j] / self.mass_x[i, j]
+                    self.velocity_x[i, j] -= inv_rho * coefficient * pressure_gradient
+                else:
+                    self.velocity_x[i, j] = 0
+            if self.is_interior(i, j - 1) or self.is_interior(i, j):
+                if not (self.is_colliding(i, j - 1) or self.is_colliding(i, j)):
+                    pressure_gradient = self.pressure_c[i, j] - self.pressure_c[i, j - 1]
+                    inv_rho = self.volume_y[i, j] / self.mass_y[i, j]
+                    self.velocity_y[i, j] -= inv_rho * coefficient * pressure_gradient
+                else:
+                    self.velocity_y[i, j] = 0
 
-        # Solve the linear system, apply the resulting pressure:
-        solver = SparseCG(A.build(), b, atol=1e-5, max_iter=500)
-        self.apply_pressure(solver.solve()[0])
+    def correct_pressure(self):
+        self.pressure_solver.initialize()
+        self.pressure_solver.solve(500)
+        # import numpy as np
+        # print("x, max = ", np.max(self.velocity_x.to_numpy()))
+        # print("x, min = ", np.min(self.velocity_x.to_numpy()))
+        # print("y, max = ", np.max(self.velocity_y.to_numpy()))
+        # print("y, min = ", np.min(self.velocity_y.to_numpy()))
+        # print("p, max = ", np.max(self.pressure_c.to_numpy()))
+        # print("p, min = ", np.min(self.pressure_c.to_numpy()))
+        # print()
+        self._apply_pressure()
+
+        # n_cells = self.n_grid * self.n_grid
+        # A = SparseMatrixBuilder(max_num_triplets=(5 * n_cells), num_rows=n_cells, num_cols=n_cells, dtype=ti.f32)
+        # b = ti.ndarray(ti.f32, shape=n_cells)
+        # self.fill_pressure_system(A, b)
+
+        # # Solve the linear system, apply the resulting pressure:
+        # solver = SparseCG(A.build(), b, atol=1e-5, max_iter=500)
+        # self.apply_pressure(solver.solve()[0])
 
     @ti.kernel
     def grid_to_particle(self):
