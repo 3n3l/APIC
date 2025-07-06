@@ -106,6 +106,6 @@ class APIC:
                 continue
 
             # Find the nearest cell and set it to interior:
-            i, j = ti.cast(self.position_p[p] * self.inv_dx, int)  # pyright: ignore
+            i, j = ti.floor(self.position_p[p] * self.inv_dx, dtype=ti.i32)  # pyright: ignore
             if not self.is_colliding(i, j):  # pyright: ignore
                 self.classification_c[i, j] = Classification.Interior
