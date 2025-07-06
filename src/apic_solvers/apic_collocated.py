@@ -10,7 +10,7 @@ class CollocatedAPIC(APIC):
     def __init__(self, max_particles: int, n_grid: int, dt: float):
         super().__init__(max_particles, n_grid, dt)
 
-        self.rho_0 = 1000 # TODO: implement density correction
+        self.rho_0 = 1000  # TODO: implement density correction
 
         # Properties on MAC-cells:
         self.velocity_c = ti.Vector.field(2, dtype=ti.f32, shape=(self.n_grid, self.n_grid))
@@ -44,7 +44,7 @@ class CollocatedAPIC(APIC):
                 continue
 
             # Lower left corner of the interpolation grid:
-            base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), ti.i32)
+            base_c = ti.floor((self.position_p[p] * self.inv_dx - 0.5), dtype=ti.i32)
 
             # Distance between lower left corner and particle position:
             dist_c = self.position_p[p] * self.inv_dx - ti.cast(base_c, ti.f32)
@@ -197,7 +197,7 @@ class CollocatedAPIC(APIC):
             # We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
             # this avoids computing the weight gradients and results in less dissipation.
             # C = B @ (D^(-1)), NOTE: one inv_dx is cancelled with one dx in dpos.
-            self.C_p[p] = 4 * self.inv_dx * B
+            self.C_p[p] = B * 4 * self.inv_dx
             self.velocity_p[p] = velocity
             self.position_p[p] += self.dt * velocity
 

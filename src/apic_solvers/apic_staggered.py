@@ -24,6 +24,12 @@ class StaggeredAPIC(APIC):
         self.cx_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
         self.cy_p = ti.Vector.field(2, dtype=ti.f32, shape=max_particles)
 
+        # Offsets for weight computations:
+        self.base_offset_x = ti.Vector([0.5, 1.0])
+        self.base_offset_y = ti.Vector([1.0, 0.5])
+        self.dist_offset_x = ti.Vector([0.0, 0.5])
+        self.dist_offset_y = ti.Vector([0.5, 0.0])
+
     @ti.func
     def add_particle(self, index: ti.i32, position: ti.template(), geometry: ti.template()):  # pyright: ignore
         # Seed from the geometry and given position:
@@ -55,14 +61,14 @@ class StaggeredAPIC(APIC):
                 continue
 
             # Lower left corner of the interpolation grid:
-            base_x = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.0, 0.5]) - 0.5), ti.i32)
-            base_y = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.5, 0.0]) - 0.5), ti.i32)
+            base_x = ti.floor((self.position_p[p] * self.inv_dx - self.base_offset_x), dtype=ti.i32)
+            base_y = ti.floor((self.position_p[p] * self.inv_dx - self.base_offset_y), dtype=ti.i32)
 
             # Distance between lower left corner and particle position:
-            dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - ti.Vector([0.0, 0.5])
-            dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - ti.Vector([0.5, 0.0])
+            dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - self.dist_offset_x
+            dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - self.dist_offset_y
 
-            # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2)
+            # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2):
             # Based on https://www.bilibili.com/opus/662560355423092789
             w_x = [0.5 * (1.5 - dist_x) ** 2, 0.75 - (dist_x - 1) ** 2, 0.5 * (dist_x - 0.5) ** 2]
             w_y = [0.5 * (1.5 - dist_y) ** 2, 0.75 - (dist_y - 1) ** 2, 0.5 * (dist_y - 0.5) ** 2]
@@ -204,12 +210,12 @@ class StaggeredAPIC(APIC):
                 continue
 
             # Lower left corner of the interpolation grid:
-            base_x = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.0, 0.5]) - 0.5), ti.i32)
-            base_y = ti.floor((self.position_p[p] * self.inv_dx - ti.Vector([0.5, 0.0]) - 0.5), ti.i32)
+            base_x = ti.floor((self.position_p[p] * self.inv_dx - self.base_offset_x), dtype=ti.i32)
+            base_y = ti.floor((self.position_p[p] * self.inv_dx - self.base_offset_y), dtype=ti.i32)
 
             # Distance between lower left corner and particle position:
-            dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - ti.Vector([0.0, 0.5])
-            dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - ti.Vector([0.5, 0.0])
+            dist_x = self.position_p[p] * self.inv_dx - ti.cast(base_x, ti.f32) - self.dist_offset_x
+            dist_y = self.position_p[p] * self.inv_dx - ti.cast(base_y, ti.f32) - self.dist_offset_y
 
             # Quadratic kernels (JST16, Eqn. 123, with x=fx, fx-1, fx-2)
             # Based on https://www.bilibili.com/opus/662560355423092789
@@ -234,8 +240,8 @@ class StaggeredAPIC(APIC):
             # We compute c_x, c_y from b_x, b_y as in https://doi.org/10.1016/j.jcp.2020.109311,
             # this avoids computing the weight gradients and results in less dissipation.
             # C = B @ (D^(-1)), NOTE: one inv_dx is cancelled with one dx in dpos.
-            self.cx_p[p] = 4 * self.inv_dx * b_x
-            self.cy_p[p] = 4 * self.inv_dx * b_y
+            self.cx_p[p] = b_x * 4 * self.inv_dx
+            self.cy_p[p] = b_y * 4 * self.inv_dx
             self.velocity_p[p] = next_velocity
             self.position_p[p] += self.dt * next_velocity
 
