@@ -16,8 +16,8 @@ configuration_list = [
             ),
             *[
                 Rectangle(
-                    lower_left=(0.48, 0.9),
-                    velocity=(0, -2.5),
+                    lower_left=(0.47, 0.9),
+                    velocity=(0, -2),
                     size=(0.06, 0.06),
                     frame_threshold=i,
                 )
@@ -49,8 +49,8 @@ configuration_list = [
         name="Waterjet",
         geometries=[
             Rectangle(
-                lower_left=(0.48, 0.9),
-                velocity=(0, -2.5),
+                lower_left=(0.47, 0.9),
+                velocity=(0, -2),
                 size=(0.06, 0.06),
                 frame_threshold=i,
             )
